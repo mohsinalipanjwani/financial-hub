@@ -1,0 +1,352 @@
+// Financial Hub — relational schema
+// Google Sheets is the operational source of truth; this database is the
+// normalized, queryable copy that the dashboard reads from. Every financial
+// record keeps a pointer back to its source row for auditability.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (mirror the controlled "Settings" tab in the master sheet)
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  FINANCE
+  MANAGEMENT
+  EMPLOYEE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+}
+
+enum RevenueStatus {
+  DRAFT
+  CONFIRMED
+  INVOICED
+  CANCELLED
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  CLEARED
+  FAILED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum DataQualitySeverity {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum DataQualityStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+// ---------------------------------------------------------------------------
+// Auth / users
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(EMPLOYEE)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Core financial entities
+// ---------------------------------------------------------------------------
+
+model Client {
+  id         String    @id @default(cuid())
+  // Stable business key from the sheet ("Client ID"), unique.
+  clientKey  String    @unique @map("client_key")
+  name       String
+  source     String?
+  lead       String?
+  accountManager String? @map("account_manager")
+  active     Boolean   @default(true)
+  startDate  DateTime? @map("start_date")
+  notes      String?
+
+  // Auditability
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  revenue    Revenue[]
+  payments   Payment[]
+
+  @@map("clients")
+}
+
+model Revenue {
+  id            String        @id @default(cuid())
+  // Stable business key from the sheet ("Revenue ID"), unique -> idempotent sync.
+  revenueKey    String        @unique @map("revenue_key")
+
+  date          DateTime
+  // First day of the reporting month this revenue belongs to.
+  month         DateTime
+  project       String?
+  phase         String?
+
+  // Original amount + currency are NEVER overwritten. Convert at read time.
+  amount        Decimal       @db.Decimal(14, 2)
+  currency      String        @default("USD")
+
+  status        RevenueStatus @default(CONFIRMED)
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+
+  receivedDate  DateTime?     @map("received_date")
+  expectedDate  DateTime?     @map("expected_date")
+  paymentMethod String?       @map("payment_method")
+  lead          String?
+  developer     String?
+  notes         String?
+
+  clientId      String        @map("client_id")
+  client        Client        @relation(fields: [clientId], references: [id])
+
+  payments      Payment[]
+
+  // Auditability
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([month])
+  @@index([clientId])
+  @@map("revenue")
+}
+
+model Payment {
+  id           String              @id @default(cuid())
+  paymentKey   String              @unique @map("payment_key")
+  date         DateTime
+  amount       Decimal             @db.Decimal(14, 2)
+  currency     String              @default("USD")
+  method       String?
+  status       PaymentRecordStatus @default(CLEARED)
+  notes        String?
+
+  clientId     String              @map("client_id")
+  client       Client              @relation(fields: [clientId], references: [id])
+
+  // A payment optionally settles a specific revenue record.
+  revenueId    String?             @map("revenue_id")
+  revenue      Revenue?            @relation(fields: [revenueId], references: [id])
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([date])
+  @@index([clientId])
+  @@map("payments")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  employeeKey String  @unique @map("employee_key")
+  name       String
+  active     Boolean  @default(true)
+  notes      String?
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  costs      TeamCost[]
+
+  @@map("team_members")
+}
+
+// One row per employee per month (avoids monthly tabs; keeps history).
+model TeamCost {
+  id           String   @id @default(cuid())
+  costKey      String   @unique @map("cost_key")
+  month        DateTime
+  salary       Decimal  @db.Decimal(14, 2)
+  overhead     Decimal  @db.Decimal(14, 2) @default(0)
+  currency     String   @default("USD")
+
+  teamMemberId String   @map("team_member_id")
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id])
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([month])
+  @@index([teamMemberId])
+  @@map("team_costs")
+}
+
+model Subscription {
+  id           String   @id @default(cuid())
+  subscriptionKey String @unique @map("subscription_key")
+  name         String
+  owner        String?
+  category     String?
+  monthlyCost  Decimal  @db.Decimal(14, 2) @map("monthly_cost")
+  currency     String   @default("USD")
+  startDate    DateTime? @map("start_date")
+  renewalDate  DateTime? @map("renewal_date")
+  active       Boolean  @default(true)
+  notes        String?
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  expenseKey  String   @unique @map("expense_key")
+  date        DateTime
+  month       DateTime
+  category    String?
+  description String?
+  amount      Decimal  @db.Decimal(14, 2)
+  currency    String   @default("USD")
+  paid        Boolean  @default(true)
+  notes       String?
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([month])
+  @@map("expenses")
+}
+
+// Exchange rate to USD, effective from a given date (most recent <= date wins).
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  date      DateTime
+  currency  String
+  rateToUsd Decimal  @db.Decimal(18, 8) @map("rate_to_usd")
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([currency, date])
+  @@index([currency])
+  @@map("exchange_rates")
+}
+
+// ---------------------------------------------------------------------------
+// Sync + data quality + audit
+// ---------------------------------------------------------------------------
+
+model SyncRun {
+  id          String     @id @default(cuid())
+  startedAt   DateTime   @default(now()) @map("started_at")
+  finishedAt  DateTime?  @map("finished_at")
+  status      SyncStatus @default(RUNNING)
+  rowsRead    Int        @default(0) @map("rows_read")
+  rowsCreated Int        @default(0) @map("rows_created")
+  rowsUpdated Int        @default(0) @map("rows_updated")
+  rowsRejected Int       @default(0) @map("rows_rejected")
+  errorCount  Int        @default(0) @map("error_count")
+  message     String?
+
+  @@map("sync_runs")
+}
+
+model DataQualityIssue {
+  id         String              @id @default(cuid())
+  entityType String              @map("entity_type") // "revenue", "client", ...
+  entityKey  String?             @map("entity_key")  // business key if known
+  code       String              // e.g. "MISSING_AMOUNT"
+  severity   DataQualitySeverity @default(WARNING)
+  status     DataQualityStatus   @default(OPEN)
+  message    String
+  sourceSheet String?            @map("source_sheet")
+  sourceRow  Int?                @map("source_row")
+
+  detectedAt DateTime            @default(now()) @map("detected_at")
+  resolvedAt DateTime?           @map("resolved_at")
+
+  @@index([status])
+  @@index([entityType])
+  @@map("data_quality_issues")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
