@@ -101,18 +101,24 @@ server**, never in the browser.
 Phase 2 replaces the login route body with the Google OAuth callback; the
 session shape and every permission check stay the same.
 
-## Sync architecture (Phase 2)
+## Sync architecture (Phase 2 — implemented)
 
-The dashboard never queries Google Sheets directly. A sync worker will read the
-master sheet, validate and normalize rows, and upsert into the database keyed by
-stable business IDs (`Revenue ID`, `Client ID`, …) so re-syncing is
-**idempotent** — the same row never creates duplicates. Each run is recorded in
-`sync_runs` (rows read / created / updated / rejected, errors, timing) and the
-topbar shows "Last synced: N minutes ago". Deletions are soft (`archived`), so
-history is never lost.
+The dashboard never queries Google Sheets directly. The sync engine
+(`src/lib/sync/engine.ts`) reads the master sheet, validates and normalizes
+rows, and upserts into the database keyed by stable business IDs (`Revenue ID`,
+`Client ID`, …) so re-syncing is **idempotent** — the same row never creates
+duplicates. Each run is recorded in `sync_runs` (rows read / created / updated /
+rejected, errors, timing) and the topbar shows "Last synced: N minutes ago".
+Deletions are soft (`archived`), so history is never lost.
 
-Phase 1 ships with seeded data and a representative `sync_runs` entry so the
-sync surfaces (last-synced indicator, Settings → Sync History) are real.
+The engine is driven by a `SheetSource` interface (`GoogleSheetSource` for the
+live API, `InMemorySheetSource` for tests), which is why the full pipeline is
+unit-testable against the database without any network. Google OAuth handles
+sign-in and read-only Sheets access; tokens are encrypted at rest. See
+[`google-oauth-and-sync.md`](google-oauth-and-sync.md) for the full flow.
+
+Phase 1 seeded data (`source_system = "seed"`) coexists with synced data
+(`source_system = "google"`); archiving only ever touches google-sourced rows.
 
 ## Data quality
 

@@ -338,6 +338,23 @@ model DataQualityIssue {
   @@map("data_quality_issues")
 }
 
+// The Google account + spreadsheet used to sync the master sheet.
+// Stored as a single row (id = "primary"). Tokens are encrypted at rest.
+model GoogleConnection {
+  id                String    @id @default("primary")
+  email             String
+  accessToken       String    @map("access_token") // encrypted
+  refreshToken      String?   @map("refresh_token") // encrypted
+  expiresAt         DateTime? @map("expires_at")
+  scope             String?
+  spreadsheetId     String?   @map("spreadsheet_id")
+  connectedByUserId String?   @map("connected_by_user_id")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("google_connections")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   action     String

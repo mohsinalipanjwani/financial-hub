@@ -93,7 +93,18 @@ Expenses · Payments · P&L · Data Quality · Settings.
 
 - **Phase 1 (done):** schema, auth + RBAC, dashboard, all pages, calculation
   tests, seeded data.
-- **Phase 2:** Google OAuth, Google Sheets connection, idempotent sync worker,
-  sync history, flexible column mapping.
+- **Phase 2 (done):** Google OAuth sign-in, encrypted token storage, Google
+  Sheets connection, idempotent sync engine (upsert by business key,
+  soft-archive, rejects), sync history, and column mapping. See
+  [`docs/google-oauth-and-sync.md`](docs/google-oauth-and-sync.md).
 - **Phase 3:** advanced client analytics, exportable reports, finer permissions,
-  full audit logs.
+  scheduled/background sync, Excel import/migration utility.
+
+## Google Sheets sync (Phase 2)
+
+Configure the Google env vars (see `.env.example` and
+[`docs/google-oauth-and-sync.md`](docs/google-oauth-and-sync.md)), sign in with
+Google, then set the spreadsheet ID and **Sync now** from Settings. Without
+those vars the app runs on seeded data with the dev login. Sync is idempotent —
+re-running never duplicates records — and vanished rows are soft-archived, never
+deleted.

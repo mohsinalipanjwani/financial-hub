@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, SectionTitle, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatDate, relativeTime } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
+import { isGoogleConfigured } from "@/lib/google/oauth";
+import { getConnectionStatus, type ConnectionStatus } from "@/lib/google/connection";
+import { GooglePanel } from "./google-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +16,14 @@ export default async function SettingsPage() {
   const reporting = process.env.DEFAULT_REPORTING_CURRENCY || "USD";
   const manages = canManageConfig(user.role);
 
-  const [rates, syncs, users, sheetSync] = await Promise.all([
+  const [rates, syncs, users, sheetSync, connection] = await Promise.all([
     prisma.exchangeRate.findMany({ orderBy: [{ currency: "asc" }, { date: "desc" }] }),
     prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 5 }),
     manages ? prisma.user.findMany({ orderBy: { role: "asc" } }) : Promise.resolve([]),
     prisma.syncRun.findFirst({ orderBy: { startedAt: "desc" } }),
+    manages ? getConnectionStatus() : Promise.resolve<ConnectionStatus>({ connected: false }),
   ]);
+  const googleEnabled = isGoogleConfigured();
 
   return (
     <div>
@@ -27,8 +32,20 @@ export default async function SettingsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatTile label="Reporting Currency" value={reporting} />
         <StatTile label="Last Sync" value={relativeTime(sheetSync?.finishedAt ?? sheetSync?.startedAt ?? null)} />
-        <StatTile label="Sheets Integration" value="Phase 2" sub="Configured via master sheet" />
+        <StatTile label="Google Sheets" value={connection.connected ? "Connected" : googleEnabled ? "Not connected" : "Not configured"} sub={connection.connected ? connection.email : undefined} />
       </div>
+
+      {manages && (
+        <Card className="mb-6">
+          <SectionTitle>Google Sheets Sync</SectionTitle>
+          <GooglePanel
+            googleEnabled={googleEnabled}
+            connected={connection.connected}
+            email={connection.email}
+            spreadsheetId={connection.spreadsheetId}
+          />
+        </Card>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         <Card>
