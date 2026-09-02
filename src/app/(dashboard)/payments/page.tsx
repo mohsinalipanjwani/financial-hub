@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
 import { SearchBox } from "@/components/search-box";
+import { ExportButton } from "@/components/export-button";
 import { PageHeader, Card, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -54,7 +55,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Payments"
         description={`Actual cash received — ${period.label}`}
-        actions={<SearchBox placeholder="Search client, method, ID…" />}
+        actions={<div className="flex gap-2"><SearchBox placeholder="Search client, method, ID…" /><ExportButton type="payments" /></div>}
       />
       <Filters clients={clients} sources={[]} />
 

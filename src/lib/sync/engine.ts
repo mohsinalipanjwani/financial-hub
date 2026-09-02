@@ -19,8 +19,6 @@ import {
 } from "./parsers";
 import { persistDataQuality } from "@/lib/finance/data-quality";
 
-const SOURCE = "google";
-
 export interface SyncResult {
   syncRunId: string;
   status: "SUCCESS" | "PARTIAL" | "FAILED";
@@ -42,9 +40,18 @@ interface Stats {
 
 export async function runSync(
   source: SheetSource,
-  opts: { spreadsheetId?: string; mappings?: Record<string, FieldMap> } = {},
+  opts: {
+    spreadsheetId?: string;
+    mappings?: Record<string, FieldMap>;
+    /** Tag written to source_system (default "google"). Use "import" for manual CSV imports. */
+    source?: string;
+    /** Archive records of this source that vanish from the sheet (default true). Off for partial imports. */
+    archiveMissing?: boolean;
+  } = {},
 ): Promise<SyncResult> {
   const mappings = opts.mappings ?? DEFAULT_MAPPINGS;
+  const SOURCE = opts.source ?? "google";
+  const doArchive = opts.archiveMissing ?? true;
   const run = await prisma.syncRun.create({ data: { status: "RUNNING" } });
   const stats: Stats = { read: 0, created: 0, updated: 0, rejected: 0, rejects: [] };
 
@@ -87,7 +94,7 @@ export async function runSync(
     }
     await archiveMissing("client", clientKeys, (keys) =>
       prisma.client.updateMany({ where: { source_system: SOURCE, archived: false, clientKey: { notIn: keys } }, data: { archived: true } }),
-      clientKeys.size > 0,
+      doArchive && clientKeys.size > 0,
     );
 
     const clientIdByKey = await keyMap(prisma.client.findMany({ select: { id: true, clientKey: true } }), "clientKey");
@@ -119,7 +126,7 @@ export async function runSync(
     }
     await archiveMissing("team_cost", costKeys, (keys) =>
       prisma.teamCost.updateMany({ where: { source_system: SOURCE, archived: false, costKey: { notIn: keys } }, data: { archived: true } }),
-      costKeys.size > 0,
+      doArchive && costKeys.size > 0,
     );
 
     // --- Subscriptions ---
@@ -140,7 +147,7 @@ export async function runSync(
     }
     await archiveMissing("subscription", subKeys, (keys) =>
       prisma.subscription.updateMany({ where: { source_system: SOURCE, archived: false, subscriptionKey: { notIn: keys } }, data: { archived: true } }),
-      subKeys.size > 0,
+      doArchive && subKeys.size > 0,
     );
 
     // --- Expenses ---
@@ -161,7 +168,7 @@ export async function runSync(
     }
     await archiveMissing("expense", expenseKeys, (keys) =>
       prisma.expense.updateMany({ where: { source_system: SOURCE, archived: false, expenseKey: { notIn: keys } }, data: { archived: true } }),
-      expenseKeys.size > 0,
+      doArchive && expenseKeys.size > 0,
     );
 
     // --- Revenue (needs client FK) ---
@@ -186,7 +193,7 @@ export async function runSync(
     }
     await archiveMissing("revenue", revenueKeys, (keys) =>
       prisma.revenue.updateMany({ where: { source_system: SOURCE, archived: false, revenueKey: { notIn: keys } }, data: { archived: true } }),
-      revenueKeys.size > 0,
+      doArchive && revenueKeys.size > 0,
     );
 
     const revenueIdByKey = await keyMap(prisma.revenue.findMany({ select: { id: true, revenueKey: true } }), "revenueKey");
@@ -212,7 +219,7 @@ export async function runSync(
     }
     await archiveMissing("payment", paymentKeys, (keys) =>
       prisma.payment.updateMany({ where: { source_system: SOURCE, archived: false, paymentKey: { notIn: keys } }, data: { archived: true } }),
-      paymentKeys.size > 0,
+      doArchive && paymentKeys.size > 0,
     );
 
     // Refresh data-quality snapshot.

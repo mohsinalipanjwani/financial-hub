@@ -13,11 +13,14 @@ const NAV = [
   { href: "/payments", label: "Payments", icon: "≡" },
   { href: "/pnl", label: "P&L", icon: "∑" },
   { href: "/data-quality", label: "Data Quality", icon: "⚠" },
+  { href: "/import", label: "Import", icon: "⇪", manage: true },
+  { href: "/audit", label: "Audit Log", icon: "◷", manage: true },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
-export function Sidebar({ issueCount }: { issueCount: number }) {
+export function Sidebar({ issueCount, canManage = false }: { issueCount: number; canManage?: boolean }) {
   const pathname = usePathname();
+  const items = NAV.filter((i) => !i.manage || canManage);
 
   return (
     <aside
@@ -35,7 +38,7 @@ export function Sidebar({ issueCount }: { issueCount: number }) {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link

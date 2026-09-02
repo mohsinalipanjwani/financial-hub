@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
 import { SearchBox } from "@/components/search-box";
+import { ExportButton } from "@/components/export-button";
 import { PageHeader, Card, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -63,7 +64,7 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Revenue"
         description={`Revenue records — ${period.label}`}
-        actions={<SearchBox placeholder="Search client, project, ID…" />}
+        actions={<div className="flex gap-2"><SearchBox placeholder="Search client, project, ID…" /><ExportButton type="revenue" /></div>}
       />
       <Filters clients={clients} sources={sources} />
 

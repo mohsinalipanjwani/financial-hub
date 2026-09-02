@@ -5,6 +5,7 @@ import { getClientPerformance } from "@/lib/finance/service";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
 import { SearchBox } from "@/components/search-box";
+import { ExportButton } from "@/components/export-button";
 import { PageHeader, Card, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -36,7 +37,7 @@ export default async function ClientsPage({
       <PageHeader
         title="Clients"
         description={`Client performance — ${period.label}`}
-        actions={<SearchBox placeholder="Search clients…" />}
+        actions={<div className="flex gap-2"><SearchBox placeholder="Search clients…" /><ExportButton type="clients" /></div>}
       />
       <Filters clients={[]} sources={sources} showClient={false} />
 

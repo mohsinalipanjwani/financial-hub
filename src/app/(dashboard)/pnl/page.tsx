@@ -2,6 +2,7 @@ import { requireFinancialAccess } from "@/lib/auth";
 import { resolvePeriod } from "@/lib/finance/period";
 import { getSummary } from "@/lib/finance/service";
 import { Filters } from "@/components/filters";
+import { ExportButton } from "@/components/export-button";
 import { PageHeader, Card, SectionTitle } from "@/components/ui";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -35,7 +36,11 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div>
-      <PageHeader title="Profit & Loss" description={`Company-level P&L — ${period.label}`} />
+      <PageHeader
+        title="Profit & Loss"
+        description={`Company-level P&L — ${period.label}`}
+        actions={<ExportButton type="pnl" />}
+      />
       <Filters clients={[]} sources={[]} showClient={false} />
 
       <div className="max-w-2xl">

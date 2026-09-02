@@ -6,6 +6,7 @@ import { NoAccess } from "@/components/no-access";
 import { isGoogleConfigured } from "@/lib/google/oauth";
 import { getConnectionStatus, type ConnectionStatus } from "@/lib/google/connection";
 import { GooglePanel } from "./google-panel";
+import { UsersManager } from "./users-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -106,26 +107,16 @@ export default async function SettingsPage() {
       {manages && (
         <Card>
           <SectionTitle>Users & Roles</SectionTitle>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-muted border-b">
-                <th className="py-2 font-medium">Name</th>
-                <th className="py-2 font-medium">Email</th>
-                <th className="py-2 font-medium">Role</th>
-                <th className="py-2 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b last:border-0">
-                  <td className="py-2 font-medium">{u.name}</td>
-                  <td className="py-2 text-muted">{u.email}</td>
-                  <td className="py-2"><Badge>{u.role}</Badge></td>
-                  <td className="py-2"><Badge tone={u.active ? "positive" : "neutral"}>{u.active ? "Active" : "Inactive"}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p className="text-sm text-muted mb-3">
+            {user.role === "ADMIN"
+              ? "Change a user's role or active status. Roles take effect on their next request."
+              : "Role management is restricted to Admins."}
+          </p>
+          <UsersManager
+            users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active }))}
+            canEdit={user.role === "ADMIN"}
+            selfId={user.id}
+          />
         </Card>
       )}
 

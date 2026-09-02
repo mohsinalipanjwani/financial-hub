@@ -97,8 +97,12 @@ Expenses · Payments · P&L · Data Quality · Settings.
   Sheets connection, idempotent sync engine (upsert by business key,
   soft-archive, rejects), sync history, and column mapping. See
   [`docs/google-oauth-and-sync.md`](docs/google-oauth-and-sync.md).
-- **Phase 3:** advanced client analytics, exportable reports, finer permissions,
-  scheduled/background sync, Excel import/migration utility.
+- **Phase 3 (done):** advanced client analytics (collection rate, days-to-pay,
+  aging), CSV exports (Revenue/Payments/Clients/P&L), the Excel/CSV
+  import & migration utility (dry-run report → commit), an audit-log page, and
+  role management (Admin).
+- **Later:** scheduled/background sync, exportable PDF reports, per-field column
+  mapping UI.
 
 ## Google Sheets sync (Phase 2)
 

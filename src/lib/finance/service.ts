@@ -37,6 +37,7 @@ import {
   eachMonth,
   formatMonthLabel,
 } from "./period";
+import { collectionRate, averageDaysToPay, agingBuckets } from "./analytics";
 
 const REPORTING = process.env.DEFAULT_REPORTING_CURRENCY || "USD";
 
@@ -290,6 +291,9 @@ export interface ClientDetail {
   pending: number;
   projectCount: number;
   contribution: number;
+  collectionRate: number;
+  avgDaysToPay: number | null;
+  aging: import("./analytics").AgingBuckets;
   monthlyTrend: { month: string; revenue: number }[];
   revenueByPhase: { name: string; value: number }[];
   projects: { name: string; revenue: number }[];
@@ -385,6 +389,15 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
     })
     .filter((x) => x.pending > 0);
 
+  const aging = agingBuckets(
+    pendingItems.map((p) => ({ pending: p.pending, expectedDate: p.expectedDate })),
+  );
+  const avgDaysToPay = averageDaysToPay(
+    revenueRows
+      .filter((r) => r.paymentStatus === "PAID")
+      .map((r) => ({ expectedDate: r.expectedDate, receivedDate: r.receivedDate })),
+  );
+
   return {
     reportingCurrency: REPORTING,
     client: { id: client.id, name: client.name, source: client.source, lead: client.lead, accountManager: client.accountManager, active: client.active },
@@ -393,6 +406,9 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
     pending,
     projectCount: projects.length,
     contribution,
+    collectionRate: collectionRate(received, totalRevenue),
+    avgDaysToPay,
+    aging,
     monthlyTrend,
     revenueByPhase,
     projects,

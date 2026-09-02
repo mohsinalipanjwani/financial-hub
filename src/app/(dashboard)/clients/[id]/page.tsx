@@ -41,6 +41,34 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <StatTile label="Contribution" value={formatPercent(detail.contribution)} sub="of total revenue" />
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <StatTile label="Collection Rate" value={formatPercent(detail.collectionRate)} sub="received of revenue" />
+        <StatTile
+          label="Avg. Days to Pay"
+          value={detail.avgDaysToPay == null ? "—" : `${detail.avgDaysToPay} days`}
+          sub={detail.avgDaysToPay != null && detail.avgDaysToPay < 0 ? "pays early" : "vs expected date"}
+        />
+        <div className="card p-5">
+          <div className="text-sm text-muted mb-2">Outstanding by Age</div>
+          <div className="grid grid-cols-5 gap-1 text-center">
+            {[
+              { label: "Now", value: detail.aging.current },
+              { label: "1–30", value: detail.aging.d1_30 },
+              { label: "31–60", value: detail.aging.d31_60 },
+              { label: "61–90", value: detail.aging.d61_90 },
+              { label: "90+", value: detail.aging.d90plus },
+            ].map((b) => (
+              <div key={b.label}>
+                <div className="text-xs tabular-nums font-medium" style={{ color: b.label === "90+" && b.value > 0 ? "var(--negative)" : undefined }}>
+                  {money(b.value)}
+                </div>
+                <div className="text-[10px] text-muted mt-0.5">{b.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         <Card>
           <SectionTitle>Monthly Revenue Trend</SectionTitle>
