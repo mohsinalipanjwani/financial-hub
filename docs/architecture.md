@@ -101,6 +101,17 @@ server**, never in the browser.
 Phase 2 replaces the login route body with the Google OAuth callback; the
 session shape and every permission check stay the same.
 
+**Admission is invite-only.** Authorization (what a signed-in person may do) is
+separate from admission (who may sign in at all). Google sign-in is refused
+unless an **active user record already exists** for that email — i.e. an admin
+invited them first (`canAdmit`, unit-tested). The only exception is bootstrap
+admins listed in `ADMIN_EMAILS`, so the first admin can get in before anyone is
+invited. Admins invite (email + role) and revoke (deactivate) from Settings →
+Users & Roles; every invite/role change is audit-logged. The passwordless dev
+login is automatically disabled whenever Google OAuth is configured or in
+production, so real deployments admit users only through invite-gated Google
+sign-in.
+
 ## Sync architecture (Phase 2 — implemented)
 
 The dashboard never queries Google Sheets directly. The sync engine

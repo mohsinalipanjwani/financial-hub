@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, findUserByEmail } from "@/lib/auth";
+import { isGoogleConfigured } from "@/lib/google/oauth";
 import { prisma } from "@/lib/prisma";
 
-// Dev login: authenticate by selecting a seeded user email.
-// Phase 2 replaces this route's body with the Google OAuth callback.
+// Passwordless dev login for local development only. It is disabled whenever
+// Google OAuth is configured or in production, so real deployments admit users
+// only through invite-gated Google sign-in.
 export async function POST(req: NextRequest) {
+  if (isGoogleConfigured() || process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Dev login is disabled. Sign in with Google." }, { status: 403 });
+  }
+
   const { email } = await req.json().catch(() => ({ email: undefined }));
   if (!email || typeof email !== "string") {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
+  // findUserByEmail already requires an existing, active user (the allowlist).
   const user = await findUserByEmail(email);
   if (!user) {
     return NextResponse.json({ error: "Unknown or inactive user" }, { status: 401 });

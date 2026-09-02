@@ -17,28 +17,52 @@ export function UsersManager({ users, canEdit, selfId }: { users: U[]; canEdit: 
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("EMPLOYEE");
+
+  async function post(body: unknown) {
+    const res = await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed");
+    return data;
+  }
 
   async function update(userId: string, patch: { role?: string; active?: boolean }) {
     setBusy(userId); setError(null);
+    try { await post({ userId, ...patch }); router.refresh(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function invite() {
+    setBusy("invite"); setError(null);
     try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, ...patch }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
+      await post({ email: inviteEmail.trim(), role: inviteRole });
+      setInviteEmail("");
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(null);
-    }
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(null); }
   }
 
   return (
     <div>
       {error && <div className="mb-3 text-sm rounded-lg p-2" style={{ background: "rgba(220,38,38,0.1)", color: "var(--negative)" }}>{error}</div>}
+
+      {canEdit && (
+        <div className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b">
+          <label className="flex flex-col">
+            <span className="text-xs font-medium text-muted mb-1">Invite by email</span>
+            <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="person@company.com" className="rounded-lg border px-3 py-1.5 bg-surface text-sm w-64" />
+          </label>
+          <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="rounded-lg border px-3 py-1.5 bg-surface text-sm">
+            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button onClick={invite} disabled={busy === "invite" || !inviteEmail.trim()} className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60" style={{ background: "var(--primary)" }}>
+            {busy === "invite" ? "Inviting…" : "Invite"}
+          </button>
+          <span className="text-xs text-muted">Only invited people can sign in. Set someone Inactive to revoke access.</span>
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted border-b">

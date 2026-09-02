@@ -94,6 +94,25 @@ export function canManageConfig(role: Role): boolean {
   return CONFIG_ROLES.includes(role);
 }
 
+// --- Admission (invite-only) ---
+/**
+ * Decide whether a Google sign-in is allowed. Access is invite-only: a user must
+ * already exist (was invited) and be active. Bootstrap admins (ADMIN_EMAILS) are
+ * the sole exception, so the first admin can get in before anyone is invited.
+ */
+export function canAdmit(params: {
+  userExists: boolean;
+  userActive: boolean;
+  isBootstrapAdmin: boolean;
+}): { ok: boolean; reason?: string } {
+  if (params.userExists) {
+    if (!params.userActive) return { ok: false, reason: "deactivated" };
+    return { ok: true };
+  }
+  if (params.isBootstrapAdmin) return { ok: true };
+  return { ok: false, reason: "not-invited" };
+}
+
 // --- Invoicing ---
 /** Roles allowed to create / issue / void invoices and edit billing profiles. */
 export const INVOICE_MANAGE_ROLES: Role[] = ["ADMIN", "FINANCE"];

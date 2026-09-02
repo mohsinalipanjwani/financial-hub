@@ -11,6 +11,26 @@ export async function POST(req: NextRequest) {
   if (actor.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
+
+  // --- Invite a new user (creates the allowlist entry) ---
+  if (body.email && !body.userId) {
+    const email = String(body.email).trim().toLowerCase();
+    const inviteRole = (body.role as Role) || "EMPLOYEE";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json({ error: "Valid email required" }, { status: 400 });
+    if (!ROLES.includes(inviteRole)) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      // Re-inviting an existing (possibly deactivated) user reactivates them.
+      const updated = await prisma.user.update({ where: { email }, data: { active: true, role: inviteRole } });
+      await prisma.auditLog.create({ data: { action: "REINVITE_USER", entityType: "user", entityId: updated.id, userId: actor.id, metadata: { email, role: inviteRole } } });
+      return NextResponse.json({ ok: true, user: { id: updated.id, email, role: updated.role, active: true } });
+    }
+    const created = await prisma.user.create({ data: { email, name: String(body.name || email), role: inviteRole, active: true } });
+    await prisma.auditLog.create({ data: { action: "INVITE_USER", entityType: "user", entityId: created.id, userId: actor.id, metadata: { email, role: inviteRole } } });
+    return NextResponse.json({ ok: true, user: { id: created.id, email, role: created.role, active: true } });
+  }
+
   const userId = String(body.userId || "");
   const role = body.role as Role;
   const active = body.active;
