@@ -28,6 +28,9 @@ export function Filters({
   const year = params.get("year") || String(now.getUTCFullYear());
   const month = params.get("month") ?? String(now.getUTCMonth());
   const quarter = params.get("quarter") || String(Math.floor(now.getUTCMonth() / 3) + 1);
+  const defaultMonthInput = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const start = params.get("start") || defaultMonthInput;
+  const end = params.get("end") || defaultMonthInput;
 
   const update = useCallback(
     (patch: Record<string, string | undefined>) => {
@@ -49,6 +52,7 @@ export function Filters({
         <option value="month">Monthly</option>
         <option value="quarter">Quarterly</option>
         <option value="year">Yearly</option>
+        <option value="custom">Custom range</option>
       </select>
 
       {type === "month" && (
@@ -67,11 +71,31 @@ export function Filters({
         </select>
       )}
 
-      <select value={year} onChange={(e) => update({ year: e.target.value })} className={selectCls}>
-        {[now.getUTCFullYear(), now.getUTCFullYear() - 1, now.getUTCFullYear() - 2].map((y) => (
-          <option key={y} value={y}>{y}</option>
-        ))}
-      </select>
+      {type === "custom" ? (
+        <>
+          <input
+            type="month"
+            value={start}
+            onChange={(e) => update({ start: e.target.value })}
+            className={selectCls}
+            aria-label="Start month"
+          />
+          <span className="text-sm text-muted">to</span>
+          <input
+            type="month"
+            value={end}
+            onChange={(e) => update({ end: e.target.value })}
+            className={selectCls}
+            aria-label="End month"
+          />
+        </>
+      ) : (
+        <select value={year} onChange={(e) => update({ year: e.target.value })} className={selectCls}>
+          {[now.getUTCFullYear(), now.getUTCFullYear() - 1, now.getUTCFullYear() - 2].map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      )}
 
       <div className="flex-1" />
 

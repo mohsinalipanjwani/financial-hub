@@ -62,8 +62,21 @@ export function yearPeriod(year: number): Period {
   };
 }
 
+/**
+ * Custom range over whole months, INCLUSIVE of both the start and end month.
+ * `end` is stored exclusive (first of the month after `end`) so range queries
+ * `>= start && < end` behave consistently with the other period types.
+ */
 export function customPeriod(start: Date, end: Date): Period {
-  return { type: "custom", start: startOfMonth(start), end: startOfMonth(end), label: "Custom range" };
+  const s = startOfMonth(start);
+  let e = addMonths(startOfMonth(end), 1);
+  if (e <= s) e = addMonths(s, 1); // guard against inverted ranges
+  return {
+    type: "custom",
+    start: s,
+    end: e,
+    label: `${formatMonthLabel(s)} – ${formatMonthLabel(addMonths(e, -1))}`,
+  };
 }
 
 /** The period immediately before `p`, of equal length. */

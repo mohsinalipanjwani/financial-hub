@@ -5,6 +5,7 @@ import { tryConvertCurrency } from "@/lib/finance/calculations";
 import { prisma } from "@/lib/prisma";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
+import { SearchBox } from "@/components/search-box";
 import { PageHeader, Card, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -24,11 +25,22 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const reporting = process.env.DEFAULT_REPORTING_CURRENCY || "USD";
   const rates = await loadRateTable(period.end);
 
+  const q = sp.q?.trim();
   const rows = await prisma.payment.findMany({
     where: {
       archived: false,
       date: { gte: period.start, lt: period.end },
       ...(sp.clientId ? { clientId: sp.clientId } : {}),
+      ...(q
+        ? {
+            OR: [
+              { paymentKey: { contains: q, mode: "insensitive" } },
+              { method: { contains: q, mode: "insensitive" } },
+              { client: { name: { contains: q, mode: "insensitive" } } },
+              { revenue: { revenueKey: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
     },
     include: { client: true, revenue: true },
     orderBy: { date: "desc" },
@@ -39,7 +51,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Payments" description={`Actual cash received — ${period.label}`} />
+      <PageHeader
+        title="Payments"
+        description={`Actual cash received — ${period.label}`}
+        actions={<SearchBox placeholder="Search client, method, ID…" />}
+      />
       <Filters clients={clients} sources={[]} />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -63,7 +79,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                   <th className="py-2 font-medium">Method</th>
                   <th className="py-2 font-medium text-right">Amount</th>
                   <th className="py-2 font-medium text-right">In {reporting}</th>
-                  <th className="py-2 font-medium">Status</th>
+                  <th className="py-2 pl-6 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -76,7 +92,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                     <td className="py-2.5">{r.method ?? "—"}</td>
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(Number(r.amount), r.currency)}</td>
                     <td className="py-2.5 text-right tabular-nums" style={{ color: "var(--positive)" }}>{formatCurrency(converted[i], reporting)}</td>
-                    <td className="py-2.5"><Badge tone={r.status === "CLEARED" ? "positive" : r.status === "FAILED" ? "negative" : "warning"}>{r.status}</Badge></td>
+                    <td className="py-2.5 pl-6"><Badge tone={r.status === "CLEARED" ? "positive" : r.status === "FAILED" ? "negative" : "warning"}>{r.status}</Badge></td>
                   </tr>
                 ))}
               </tbody>

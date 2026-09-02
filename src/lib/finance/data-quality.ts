@@ -6,6 +6,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { loadRateTable } from "./rates";
+import {
+  validateRevenueRow,
+  validateSubscriptionRow,
+  validateTeamCostRow,
+  findDuplicates,
+} from "./data-quality-rules";
 
 export interface QualityIssue {
   entityType: string;
@@ -32,29 +38,25 @@ export async function scanDataQuality(): Promise<QualityIssue[]> {
 
   // --- Revenue checks ---
   for (const r of revenue) {
-    const base = { sourceSheet: r.sourceSheet, sourceRow: r.sourceRow, entityKey: r.revenueKey };
-    if (!r.clientId) {
-      issues.push({ entityType: "revenue", code: "MISSING_CLIENT", severity: "ERROR", message: `Revenue ${r.revenueKey} has no client`, ...base });
-    }
-    if (r.amount == null || Number(r.amount) <= 0) {
-      issues.push({ entityType: "revenue", code: "MISSING_AMOUNT", severity: "ERROR", message: `Revenue ${r.revenueKey} has a missing or non-positive amount`, ...base });
-    }
-    if (!r.date) {
-      issues.push({ entityType: "revenue", code: "MISSING_DATE", severity: "ERROR", message: `Revenue ${r.revenueKey} has no date`, ...base });
-    }
-    if (!knownCurrencies.has(r.currency)) {
-      issues.push({ entityType: "revenue", code: "UNKNOWN_CURRENCY", severity: "ERROR", message: `Revenue ${r.revenueKey} uses currency ${r.currency} with no exchange rate`, ...base });
-    }
-    if (r.paymentStatus === "PAID" && !r.receivedDate) {
-      issues.push({ entityType: "revenue", code: "PAID_NO_RECEIVED_DATE", severity: "WARNING", message: `Revenue ${r.revenueKey} is marked Paid but has no received date`, ...base });
-    }
-    if (!["PENDING", "PAID", "PARTIAL"].includes(r.paymentStatus)) {
-      issues.push({ entityType: "revenue", code: "INVALID_PAYMENT_STATUS", severity: "ERROR", message: `Revenue ${r.revenueKey} has an invalid payment status`, ...base });
+    const base = { entityType: "revenue", sourceSheet: r.sourceSheet, sourceRow: r.sourceRow, entityKey: r.revenueKey };
+    for (const issue of validateRevenueRow(
+      {
+        revenueKey: r.revenueKey,
+        clientId: r.clientId,
+        amount: r.amount == null ? null : Number(r.amount),
+        hasDate: !!r.date,
+        currency: r.currency,
+        paymentStatus: r.paymentStatus,
+        hasReceivedDate: !!r.receivedDate,
+      },
+      knownCurrencies,
+    )) {
+      issues.push({ ...base, ...issue });
     }
   }
 
   // --- Duplicate Revenue IDs (defensive; DB enforces unique, sync may collide) ---
-  countDuplicates(revenue.map((r) => r.revenueKey)).forEach((key) =>
+  findDuplicates(revenue.map((r) => r.revenueKey)).forEach((key) =>
     issues.push({ entityType: "revenue", code: "DUPLICATE_REVENUE_ID", severity: "ERROR", message: `Duplicate Revenue ID: ${key}`, entityKey: key, sourceSheet: "Revenue", sourceRow: null }),
   );
 
@@ -64,27 +66,34 @@ export async function scanDataQuality(): Promise<QualityIssue[]> {
       issues.push({ entityType: "client", code: "MISSING_CLIENT_NAME", severity: "ERROR", message: `Client ${c.clientKey} has no name`, entityKey: c.clientKey, sourceSheet: c.sourceSheet, sourceRow: c.sourceRow });
     }
   }
-  countDuplicates(clients.map((c) => c.clientKey)).forEach((key) =>
+  findDuplicates(clients.map((c) => c.clientKey)).forEach((key) =>
     issues.push({ entityType: "client", code: "DUPLICATE_CLIENT_ID", severity: "ERROR", message: `Duplicate Client ID: ${key}`, entityKey: key, sourceSheet: "Clients", sourceRow: null }),
   );
 
   // --- Subscription checks ---
   for (const s of subscriptions) {
-    if (s.monthlyCost == null || Number(s.monthlyCost) <= 0) {
-      issues.push({ entityType: "subscription", code: "SUBSCRIPTION_MISSING_COST", severity: "WARNING", message: `Subscription ${s.name} has no monthly cost`, entityKey: s.subscriptionKey, sourceSheet: s.sourceSheet, sourceRow: s.sourceRow });
-    }
-    if (!knownCurrencies.has(s.currency)) {
-      issues.push({ entityType: "subscription", code: "UNKNOWN_CURRENCY", severity: "ERROR", message: `Subscription ${s.name} uses currency ${s.currency} with no exchange rate`, entityKey: s.subscriptionKey, sourceSheet: s.sourceSheet, sourceRow: s.sourceRow });
+    const base = { entityType: "subscription", entityKey: s.subscriptionKey, sourceSheet: s.sourceSheet, sourceRow: s.sourceRow };
+    for (const issue of validateSubscriptionRow(
+      { name: s.name, monthlyCost: s.monthlyCost == null ? null : Number(s.monthlyCost), currency: s.currency },
+      knownCurrencies,
+    )) {
+      issues.push({ ...base, ...issue });
     }
   }
 
   // --- Team cost checks ---
   for (const t of teamCosts) {
-    if ((t.salary == null || Number(t.salary) <= 0) && (t.overhead == null || Number(t.overhead) <= 0)) {
-      issues.push({ entityType: "team_cost", code: "EMPLOYEE_MISSING_COST", severity: "WARNING", message: `Team cost ${t.costKey} has no salary or overhead`, entityKey: t.costKey, sourceSheet: t.sourceSheet, sourceRow: t.sourceRow });
-    }
-    if (!knownCurrencies.has(t.currency)) {
-      issues.push({ entityType: "team_cost", code: "UNKNOWN_CURRENCY", severity: "ERROR", message: `Team cost ${t.costKey} uses currency ${t.currency} with no exchange rate`, entityKey: t.costKey, sourceSheet: t.sourceSheet, sourceRow: t.sourceRow });
+    const base = { entityType: "team_cost", entityKey: t.costKey, sourceSheet: t.sourceSheet, sourceRow: t.sourceRow };
+    for (const issue of validateTeamCostRow(
+      {
+        costKey: t.costKey,
+        salary: t.salary == null ? null : Number(t.salary),
+        overhead: t.overhead == null ? null : Number(t.overhead),
+        currency: t.currency,
+      },
+      knownCurrencies,
+    )) {
+      issues.push({ ...base, ...issue });
     }
   }
 
@@ -96,15 +105,6 @@ export async function scanDataQuality(): Promise<QualityIssue[]> {
   }
 
   return issues;
-}
-
-function countDuplicates(keys: (string | null)[]): string[] {
-  const counts = new Map<string, number>();
-  for (const k of keys) {
-    if (!k) continue;
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  return [...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k);
 }
 
 /** Persist the current scan results (replaces the open set). */

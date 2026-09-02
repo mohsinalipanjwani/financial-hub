@@ -4,6 +4,7 @@ import { resolvePeriod } from "@/lib/finance/period";
 import { getClientPerformance } from "@/lib/finance/service";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
+import { SearchBox } from "@/components/search-box";
 import { PageHeader, Card, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -25,12 +26,18 @@ export default async function ClientsPage({
   const period = resolvePeriod(sp);
   const filters = { source: sp.source };
   const { sources } = await getFilterOptions();
-  const rows = await getClientPerformance(period, filters);
+  const allRows = await getClientPerformance(period, filters);
+  const q = sp.q?.trim().toLowerCase();
+  const rows = q ? allRows.filter((r) => r.clientName.toLowerCase().includes(q)) : allRows;
   const money = (n: number) => formatCurrency(n);
 
   return (
     <div>
-      <PageHeader title="Clients" description={`Client performance — ${period.label}`} />
+      <PageHeader
+        title="Clients"
+        description={`Client performance — ${period.label}`}
+        actions={<SearchBox placeholder="Search clients…" />}
+      />
       <Filters clients={[]} sources={sources} showClient={false} />
 
       <Card>

@@ -83,7 +83,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                   <th className="py-2 font-medium">Description</th>
                   <th className="py-2 font-medium text-right">Amount</th>
                   <th className="py-2 font-medium text-right">In {reporting}</th>
-                  <th className="py-2 font-medium">Paid</th>
+                  <th className="py-2 pl-6 font-medium">Paid</th>
                 </tr>
               </thead>
               <tbody>
@@ -95,7 +95,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                     <td className="py-2.5 text-muted">{r.description ?? "—"}</td>
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(Number(r.amount), r.currency)}</td>
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(converted[i], reporting)}</td>
-                    <td className="py-2.5"><Badge tone={r.paid ? "positive" : "warning"}>{r.paid ? "Paid" : "Unpaid"}</Badge></td>
+                    <td className="py-2.5 pl-6"><Badge tone={r.paid ? "positive" : "warning"}>{r.paid ? "Paid" : "Unpaid"}</Badge></td>
                   </tr>
                 ))}
               </tbody>

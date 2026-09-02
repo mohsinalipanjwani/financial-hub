@@ -109,7 +109,7 @@ export default async function SubscriptionsPage() {
                 <th className="py-2 font-medium">Owner</th>
                 <th className="py-2 font-medium text-right">Monthly Cost</th>
                 <th className="py-2 font-medium text-right">In {reporting}</th>
-                <th className="py-2 font-medium">Status</th>
+                <th className="py-2 pl-6 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -120,7 +120,7 @@ export default async function SubscriptionsPage() {
                   <td className="py-2.5 text-muted">{s.owner ?? "—"}</td>
                   <td className="py-2.5 text-right tabular-nums">{formatCurrency(Number(s.monthlyCost), s.currency)}</td>
                   <td className="py-2.5 text-right tabular-nums">{formatCurrency(convert(s), reporting)}</td>
-                  <td className="py-2.5"><Badge tone={s.active ? "positive" : "neutral"}>{s.active ? "Active" : "Inactive"}</Badge></td>
+                  <td className="py-2.5 pl-6"><Badge tone={s.active ? "positive" : "neutral"}>{s.active ? "Active" : "Inactive"}</Badge></td>
                 </tr>
               ))}
             </tbody>

@@ -5,6 +5,7 @@ import { tryConvertCurrency } from "@/lib/finance/calculations";
 import { prisma } from "@/lib/prisma";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
+import { SearchBox } from "@/components/search-box";
 import { PageHeader, Card, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -30,12 +31,23 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
   const rates = await loadRateTable(period.end);
   const reporting = process.env.DEFAULT_REPORTING_CURRENCY || "USD";
 
+  const q = sp.q?.trim();
   const rows = await prisma.revenue.findMany({
     where: {
       archived: false,
       month: { gte: period.start, lt: period.end },
       ...(sp.clientId ? { clientId: sp.clientId } : {}),
       ...(sp.source ? { client: { source: sp.source } } : {}),
+      ...(q
+        ? {
+            OR: [
+              { revenueKey: { contains: q, mode: "insensitive" } },
+              { project: { contains: q, mode: "insensitive" } },
+              { phase: { contains: q, mode: "insensitive" } },
+              { client: { name: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
     },
     include: { client: true },
     orderBy: { date: "desc" },
@@ -48,7 +60,11 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <PageHeader title="Revenue" description={`Revenue records — ${period.label}`} />
+      <PageHeader
+        title="Revenue"
+        description={`Revenue records — ${period.label}`}
+        actions={<SearchBox placeholder="Search client, project, ID…" />}
+      />
       <Filters clients={clients} sources={sources} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -73,7 +89,7 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
                   <th className="py-2 font-medium">Date</th>
                   <th className="py-2 font-medium text-right">Amount</th>
                   <th className="py-2 font-medium text-right">In {reporting}</th>
-                  <th className="py-2 font-medium">Payment</th>
+                  <th className="py-2 pl-6 font-medium">Payment</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,7 +102,7 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
                     <td className="py-2.5 text-muted">{formatDate(r.date)}</td>
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(Number(r.amount), r.currency)}</td>
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(converted[i], reporting)}</td>
-                    <td className="py-2.5"><Badge tone={STATUS_TONE[r.paymentStatus] ?? "neutral"}>{r.paymentStatus}</Badge></td>
+                    <td className="py-2.5 pl-6"><Badge tone={STATUS_TONE[r.paymentStatus] ?? "neutral"}>{r.paymentStatus}</Badge></td>
                   </tr>
                 ))}
               </tbody>
