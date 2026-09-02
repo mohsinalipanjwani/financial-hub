@@ -1,12 +1,14 @@
-import { getSession, canManageConfig } from "@/lib/auth";
+import { getSession, canManageConfig, canManageInvoices, canViewBankDetails } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, SectionTitle, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatDate, relativeTime } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
 import { isGoogleConfigured } from "@/lib/google/oauth";
 import { getConnectionStatus, type ConnectionStatus } from "@/lib/google/connection";
+import { getCompanyProfile } from "@/lib/invoice/service";
 import { GooglePanel } from "./google-panel";
 import { UsersManager } from "./users-manager";
+import { CompanyProfileForm } from "./company-form";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +18,16 @@ export default async function SettingsPage() {
 
   const reporting = process.env.DEFAULT_REPORTING_CURRENCY || "USD";
   const manages = canManageConfig(user.role);
+  const manageInvoices = canManageInvoices(user.role);
 
-  const [rates, syncs, users, sheetSync, connection] = await Promise.all([
+  const [rates, syncs, users, sheetSync, connection, company, issuedCount] = await Promise.all([
     prisma.exchangeRate.findMany({ orderBy: [{ currency: "asc" }, { date: "desc" }] }),
     prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 5 }),
     manages ? prisma.user.findMany({ orderBy: { role: "asc" } }) : Promise.resolve([]),
     prisma.syncRun.findFirst({ orderBy: { startedAt: "desc" } }),
     manages ? getConnectionStatus() : Promise.resolve<ConnectionStatus>({ connected: false }),
+    manageInvoices ? getCompanyProfile() : Promise.resolve(null),
+    prisma.invoice.count({ where: { invoiceNumber: { not: null } } }),
   ]);
   const googleEnabled = isGoogleConfigured();
 
@@ -35,6 +40,18 @@ export default async function SettingsPage() {
         <StatTile label="Last Sync" value={relativeTime(sheetSync?.finishedAt ?? sheetSync?.startedAt ?? null)} />
         <StatTile label="Google Sheets" value={connection.connected ? "Connected" : googleEnabled ? "Not connected" : "Not configured"} sub={connection.connected ? connection.email : undefined} />
       </div>
+
+      {manageInvoices && company && (
+        <Card className="mb-6">
+          <SectionTitle>Company Billing Profile</SectionTitle>
+          <p className="text-sm text-muted mb-4">Appears on every invoice. Used to pre-fill invoice defaults and payment instructions.</p>
+          <CompanyProfileForm
+            profile={JSON.parse(JSON.stringify(company))}
+            canEditBank={canViewBankDetails(user.role)}
+            hasIssuedInvoices={issuedCount > 0}
+          />
+        </Card>
+      )}
 
       {manages && (
         <Card className="mb-6">

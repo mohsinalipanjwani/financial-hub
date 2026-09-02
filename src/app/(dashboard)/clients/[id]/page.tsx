@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireFinancialAccess } from "@/lib/auth";
+import { requireFinancialAccess, getSession, canViewInvoices } from "@/lib/auth";
 import { getClientDetail } from "@/lib/finance/service";
+import { getClientInvoiceSummary, listInvoices } from "@/lib/invoice/service";
 import { PageHeader, Card, StatTile, SectionTitle, EmptyState, Badge } from "@/components/ui";
+import { InvoiceStatusBadge } from "@/components/invoice-status";
 import { TrendChart, DonutChart } from "@/components/charts";
 import { formatCurrency, formatPercent, formatDate } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -19,6 +21,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const detail = await getClientDetail(id);
   if (!detail) notFound();
+
+  const user = await getSession();
+  const showInvoices = user ? canViewInvoices(user.role) : false;
+  const [invoiceSummary, clientInvoices] = showInvoices
+    ? await Promise.all([getClientInvoiceSummary(id), listInvoices({ clientId: id })])
+    : [null, []];
 
   const money = (n: number) => formatCurrency(n, detail.reportingCurrency);
 
@@ -68,6 +76,47 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
       </div>
+
+      {showInvoices && invoiceSummary && (
+        <Card className="mb-6">
+          <SectionTitle>Invoicing</SectionTitle>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+            <StatTile label="Total Revenue" value={money(detail.totalRevenue)} />
+            <StatTile label="Total Invoiced" value={money(invoiceSummary.totalInvoiced)} />
+            <StatTile label="Total Paid" value={money(invoiceSummary.totalPaid)} />
+            <StatTile label="Total Outstanding" value={money(invoiceSummary.totalOutstanding)} />
+            <StatTile label="Overdue" value={money(invoiceSummary.overdue)} />
+          </div>
+          {clientInvoices.length === 0 ? (
+            <EmptyState message="No invoices for this client yet." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-muted border-b">
+                  <th className="py-2 font-medium">Invoice</th>
+                  <th className="py-2 font-medium">Date</th>
+                  <th className="py-2 font-medium">Due</th>
+                  <th className="py-2 font-medium text-right">Total</th>
+                  <th className="py-2 font-medium text-right">Due</th>
+                  <th className="py-2 pl-6 font-medium">Status</th>
+                </tr></thead>
+                <tbody>
+                  {clientInvoices.map((i) => (
+                    <tr key={i.id} className="border-b last:border-0 hover:bg-surface-2">
+                      <td className="py-2.5"><Link href={`/invoices/${i.id}`} className="font-mono text-xs hover:underline" style={{ color: "var(--primary)" }}>{i.invoiceNumber || "DRAFT"}</Link></td>
+                      <td className="py-2.5 text-muted">{formatDate(i.invoiceDate)}</td>
+                      <td className="py-2.5 text-muted">{formatDate(i.dueDate)}</td>
+                      <td className="py-2.5 text-right tabular-nums">{formatCurrency(i.total, i.currency)}</td>
+                      <td className="py-2.5 text-right tabular-nums" style={{ color: i.amountDue > 0 ? "var(--warning)" : "var(--muted)" }}>{formatCurrency(i.amountDue, i.currency)}</td>
+                      <td className="py-2.5 pl-6"><InvoiceStatusBadge status={i.displayStatus} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         <Card>

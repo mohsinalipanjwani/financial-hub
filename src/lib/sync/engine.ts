@@ -225,6 +225,14 @@ export async function runSync(
     // Refresh data-quality snapshot.
     await persistDataQuality().catch(() => {});
 
+    // Re-reconcile invoice payments now that payment rows may have changed.
+    try {
+      const { recalcAllInvoices } = await import("@/lib/invoice/service");
+      await recalcAllInvoices();
+    } catch (e) {
+      console.error("Invoice recalculation after sync failed", e);
+    }
+
     const status: SyncResult["status"] = stats.rejected > 0 ? "PARTIAL" : "SUCCESS";
     await prisma.syncRun.update({
       where: { id: run.id },

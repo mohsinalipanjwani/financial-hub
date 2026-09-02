@@ -94,6 +94,24 @@ export function canManageConfig(role: Role): boolean {
   return CONFIG_ROLES.includes(role);
 }
 
+// --- Invoicing ---
+/** Roles allowed to create / issue / void invoices and edit billing profiles. */
+export const INVOICE_MANAGE_ROLES: Role[] = ["ADMIN", "FINANCE"];
+
+/** Management can view invoices; employees cannot. */
+export function canViewInvoices(role: Role): boolean {
+  return FINANCIAL_ROLES.includes(role);
+}
+
+export function canManageInvoices(role: Role): boolean {
+  return INVOICE_MANAGE_ROLES.includes(role);
+}
+
+/** Bank / payment details on the company profile are the most sensitive. */
+export function canViewBankDetails(role: Role): boolean {
+  return INVOICE_MANAGE_ROLES.includes(role);
+}
+
 /** Throws if the session is missing or lacks financial access. */
 export async function requireFinancialAccess(): Promise<SessionUser> {
   const user = await getSession();

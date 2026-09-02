@@ -1,12 +1,14 @@
-import { requireFinancialAccess } from "@/lib/auth";
+import { requireFinancialAccess, getSession, canManageInvoices, canViewInvoices } from "@/lib/auth";
 import { resolvePeriod } from "@/lib/finance/period";
 import { loadRateTable } from "@/lib/finance/rates";
 import { tryConvertCurrency } from "@/lib/finance/calculations";
+import { displayStatus, type InvoiceStatus } from "@/lib/invoice/calc";
 import { prisma } from "@/lib/prisma";
 import { getFilterOptions } from "@/lib/layout-data";
 import { Filters } from "@/components/filters";
 import { SearchBox } from "@/components/search-box";
 import { ExportButton } from "@/components/export-button";
+import { RevenueInvoiceCell } from "@/components/revenue-invoice-cell";
 import { PageHeader, Card, StatTile, EmptyState, Badge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { NoAccess } from "@/components/no-access";
@@ -27,6 +29,9 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
   }
 
   const sp = await searchParams;
+  const user = await getSession();
+  const showInvoices = user ? canViewInvoices(user.role) : false;
+  const manageInvoices = user ? canManageInvoices(user.role) : false;
   const period = resolvePeriod(sp);
   const { clients, sources } = await getFilterOptions();
   const rates = await loadRateTable(period.end);
@@ -50,10 +55,11 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
           }
         : {}),
     },
-    include: { client: true },
+    include: { client: true, invoice: true },
     orderBy: { date: "desc" },
   });
 
+  const now = new Date();
   const converted = rows.map((r) => tryConvertCurrency(Number(r.amount), r.currency, reporting, rates) ?? 0);
   const total = Math.round(converted.reduce((a, b) => a + b, 0) * 100) / 100;
   const paidCount = rows.filter((r) => r.paymentStatus === "PAID").length;
@@ -91,6 +97,7 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
                   <th className="py-2 font-medium text-right">Amount</th>
                   <th className="py-2 font-medium text-right">In {reporting}</th>
                   <th className="py-2 pl-6 font-medium">Payment</th>
+                  {showInvoices && <th className="py-2 pl-6 font-medium">Invoice</th>}
                 </tr>
               </thead>
               <tbody>
@@ -104,6 +111,19 @@ export default async function RevenuePage({ searchParams }: { searchParams: Prom
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(Number(r.amount), r.currency)}</td>
                     <td className="py-2.5 text-right tabular-nums">{formatCurrency(converted[i], reporting)}</td>
                     <td className="py-2.5 pl-6"><Badge tone={STATUS_TONE[r.paymentStatus] ?? "neutral"}>{r.paymentStatus}</Badge></td>
+                    {showInvoices && (
+                      <td className="py-2.5 pl-6">
+                        <RevenueInvoiceCell
+                          revenueId={r.id}
+                          canManage={manageInvoices}
+                          invoice={r.invoice ? {
+                            id: r.invoice.id,
+                            invoiceNumber: r.invoice.invoiceNumber,
+                            displayStatus: displayStatus(r.invoice.status as InvoiceStatus, r.invoice.dueDate, Number(r.invoice.amountDue), now),
+                          } : null}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

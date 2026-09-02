@@ -11,6 +11,7 @@ const NAV = [
   { href: "/subscriptions", label: "Subscriptions", icon: "◇" },
   { href: "/expenses", label: "Expenses", icon: "▽" },
   { href: "/payments", label: "Payments", icon: "≡" },
+  { href: "/invoices", label: "Invoices", icon: "❐", invoice: true },
   { href: "/pnl", label: "P&L", icon: "∑" },
   { href: "/data-quality", label: "Data Quality", icon: "⚠" },
   { href: "/import", label: "Import", icon: "⇪", manage: true },
@@ -18,9 +19,13 @@ const NAV = [
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
-export function Sidebar({ issueCount, canManage = false }: { issueCount: number; canManage?: boolean }) {
+export function Sidebar({ issueCount, canManage = false, canInvoices = false }: { issueCount: number; canManage?: boolean; canInvoices?: boolean }) {
   const pathname = usePathname();
-  const items = NAV.filter((i) => !i.manage || canManage);
+  const items = NAV.filter((i) => {
+    if (i.manage && !canManage) return false;
+    if (i.invoice && !canInvoices) return false;
+    return true;
+  });
 
   return (
     <aside

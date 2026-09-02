@@ -101,8 +101,14 @@ Expenses · Payments · P&L · Data Quality · Settings.
   aging), CSV exports (Revenue/Payments/Clients/P&L), the Excel/CSV
   import & migration utility (dry-run report → commit), an audit-log page, and
   role management (Admin).
-- **Later:** scheduled/background sync, exportable PDF reports, per-field column
-  mapping UI.
+- **Invoicing (done):** integrated invoice module — generate from a revenue
+  record or standalone; drafts → preview → issue → server-side PDF (headless
+  Chromium, frozen on the invoice); atomic per-year numbering; multi-payment
+  reconciliation (incl. sheet-synced payments); void/reissue; invoice dashboard,
+  client & revenue integration; company + client billing profiles; role-gated
+  actions and a full audit trail. See [`docs/invoicing.md`](docs/invoicing.md).
+- **Later:** scheduled/background sync, per-field column mapping UI, invoice email
+  delivery (data model is already scaffolded).
 
 ## Google Sheets sync (Phase 2)
 

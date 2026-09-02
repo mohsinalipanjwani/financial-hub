@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession, canManageConfig } from "@/lib/auth";
+import { getSession, canManageConfig, canViewInvoices } from "@/lib/auth";
 import { getShellData } from "@/lib/layout-data";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar issueCount={shell.issueCount} canManage={canManageConfig(user.role)} />
+      <Sidebar issueCount={shell.issueCount} canManage={canManageConfig(user.role)} canInvoices={canViewInvoices(user.role)} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar user={user} lastSynced={shell.lastSynced} issueCount={shell.issueCount} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
