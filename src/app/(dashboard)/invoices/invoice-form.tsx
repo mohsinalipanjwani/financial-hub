@@ -18,6 +18,7 @@ export interface InvoiceFormInitial {
   tax: number;
   notes?: string | null;
   paymentTerms?: string | null;
+  billToOverride?: string | null;
   items: Item[];
 }
 
@@ -35,6 +36,7 @@ export function InvoiceForm({ clients, initial }: { clients: { id: string; name:
   const [discount, setDiscount] = useState(initial?.discount ?? 0);
   const [tax, setTax] = useState(initial?.tax ?? 0);
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [billToOverride, setBillToOverride] = useState(initial?.billToOverride ?? "");
   const [items, setItems] = useState<Item[]>(initial?.items?.length ? initial.items : [emptyItem()]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export function InvoiceForm({ clients, initial }: { clients: { id: string; name:
       tax: Number(tax) || 0,
       notes: notes || null,
       paymentTerms: paymentTerms || null,
+      billToOverride: billToOverride.trim() || null,
       items: items
         .filter((i) => i.description.trim())
         .map((i) => ({ description: i.description, quantity: Number(i.quantity) || 0, unitPrice: Number(i.unitPrice) || 0, revenuePhase: i.revenuePhase || null })),
@@ -116,6 +119,11 @@ export function InvoiceForm({ clients, initial }: { clients: { id: string; name:
               <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className={`${inp} w-full mt-1`} placeholder="Net 30" />
             </label>
           </div>
+          <label className="block">
+            <span className="text-sm font-medium">Bill To <span className="font-normal text-muted">(override)</span></span>
+            <textarea value={billToOverride} onChange={(e) => setBillToOverride(e.target.value)} rows={3} className={`${inp} w-full mt-1`} placeholder={`Leave blank to bill ${clients.find((c) => c.id === clientId)?.name ?? "the client"} directly.\nAcme Holdings Ltd.\n123 Market St, Suite 400\nAustin, TX 78701`} />
+            <span className="mt-1 block text-xs text-muted">Replaces the client&apos;s details in the invoice&apos;s “Bill To” block. First line shows as the billed entity; each line appears exactly as typed. The client stays linked for reporting.</span>
+          </label>
         </div>
 
         <div className="card p-5">

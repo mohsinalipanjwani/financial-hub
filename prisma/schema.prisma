@@ -414,6 +414,7 @@ model CompanyProfile {
   bankName            String?  @map("bank_name")
   bankAccountName     String?  @map("bank_account_name")
   accountNumber       String?  @map("account_number")
+  routingNumber       String?  @map("routing_number")
   iban                String?
   swift               String?
   defaultCurrency     String   @default("USD") @map("default_currency")
@@ -456,6 +457,11 @@ model Invoice {
   status        InvoiceStatus @default(DRAFT)
   notes         String?
   paymentTerms  String?       @map("payment_terms")
+
+  // Optional per-invoice "Bill To" override. When set, it replaces the linked
+  // client's billing block on the rendered invoice (the client stays linked for
+  // reporting). Free text; each line is shown as-is.
+  billToOverride String?      @map("bill_to_override")
 
   issuedAt      DateTime?     @map("issued_at")
   sentAt        DateTime?     @map("sent_at")

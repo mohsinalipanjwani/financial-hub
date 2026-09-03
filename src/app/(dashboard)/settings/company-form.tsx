@@ -24,6 +24,7 @@ const BANK: { key: string; label: string }[] = [
   { key: "bankName", label: "Bank Name" },
   { key: "bankAccountName", label: "Account Name" },
   { key: "accountNumber", label: "Account Number" },
+  { key: "routingNumber", label: "Routing Number" },
   { key: "iban", label: "IBAN" },
   { key: "swift", label: "SWIFT" },
 ];

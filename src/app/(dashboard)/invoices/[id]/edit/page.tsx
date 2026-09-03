@@ -41,6 +41,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     tax: Number(inv.tax),
     notes: inv.notes,
     paymentTerms: inv.paymentTerms,
+    billToOverride: inv.billToOverride,
     items: inv.items.map((it) => ({ description: it.description, quantity: Number(it.quantity), unitPrice: Number(it.unitPrice), revenuePhase: it.revenuePhase })),
   };
 

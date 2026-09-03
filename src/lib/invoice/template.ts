@@ -19,6 +19,7 @@ export interface TemplateInvoice {
   notes: string | null;
   paymentTerms: string | null;
   project: string | null;
+  billToOverride: string | null;
   items: { description: string; quantity: number; unitPrice: number; amount: number; revenuePhase: string | null }[];
 }
 
@@ -53,6 +54,7 @@ export interface TemplateCompany {
   bankName: string | null;
   bankAccountName: string | null;
   accountNumber: string | null;
+  routingNumber: string | null;
   iban: string | null;
   swift: string | null;
   invoiceFooter: string | null;
@@ -102,6 +104,18 @@ export function renderInvoiceHtml(opts: {
   const cityLine = [client.city, client.state, client.postalCode].filter(Boolean).join(", ");
   const companyCityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(", ");
 
+  // A per-invoice override replaces the client's billing block entirely; the
+  // first line reads as the billed entity, the rest as address/detail lines.
+  const overrideLines = (invoice.billToOverride ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const billToBlock = overrideLines.length
+    ? overrideLines.map((l, i) => (i === 0 ? `<div class="name">${esc(l)}</div>` : `<div class="muted">${esc(l)}</div>`)).join("")
+    : `<div class="name">${esc(client.companyName || client.legalName || client.name)}</div>
+        ${client.billingContact ? `<div>${esc(client.billingContact)}</div>` : ""}
+        <div class="muted">${addressBlock([client.billingAddress, cityLine, client.country])}</div>
+        ${client.billingEmail ? `<div class="muted">${esc(client.billingEmail)}</div>` : ""}
+        ${client.taxId ? `<div class="muted">Tax ID: ${esc(client.taxId)}</div>` : ""}
+        ${client.vatNumber ? `<div class="muted">VAT: ${esc(client.vatNumber)}</div>` : ""}`;
+
   const itemsRows = invoice.items
     .map(
       (it) => `
@@ -125,6 +139,7 @@ export function renderInvoiceHtml(opts: {
         ${company.bankName ? `<div><span>Bank</span> ${esc(company.bankName)}</div>` : ""}
         ${company.bankAccountName ? `<div><span>Account Name</span> ${esc(company.bankAccountName)}</div>` : ""}
         ${company.accountNumber ? `<div><span>Account #</span> ${esc(company.accountNumber)}</div>` : ""}
+        ${company.routingNumber ? `<div><span>Routing #</span> ${esc(company.routingNumber)}</div>` : ""}
         ${company.iban ? `<div><span>IBAN</span> ${esc(company.iban)}</div>` : ""}
         ${company.swift ? `<div><span>SWIFT</span> ${esc(company.swift)}</div>` : ""}
       </div>`
@@ -194,12 +209,7 @@ export function renderInvoiceHtml(opts: {
     <div class="parties">
       <div class="party">
         <div class="label">Bill To</div>
-        <div class="name">${esc(client.companyName || client.legalName || client.name)}</div>
-        ${client.billingContact ? `<div>${esc(client.billingContact)}</div>` : ""}
-        <div class="muted">${addressBlock([client.billingAddress, cityLine, client.country])}</div>
-        ${client.billingEmail ? `<div class="muted">${esc(client.billingEmail)}</div>` : ""}
-        ${client.taxId ? `<div class="muted">Tax ID: ${esc(client.taxId)}</div>` : ""}
-        ${client.vatNumber ? `<div class="muted">VAT: ${esc(client.vatNumber)}</div>` : ""}
+        ${billToBlock}
       </div>
       <div class="party dates">
         <div class="label">Details</div>

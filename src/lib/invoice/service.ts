@@ -38,6 +38,7 @@ export interface DraftInput {
   tax?: number;
   notes?: string | null;
   paymentTerms?: string | null;
+  billToOverride?: string | null;
   items: ItemInput[];
 }
 
@@ -92,6 +93,7 @@ async function buildDraft(input: DraftInput, userId?: string) {
       status: "DRAFT",
       notes: input.notes ?? client.invoiceNotes ?? null,
       paymentTerms,
+      billToOverride: input.billToOverride?.trim() || null,
       createdById: userId ?? null,
       items: {
         create: items.map((it, i) => ({
@@ -172,6 +174,7 @@ export async function updateDraft(id: string, input: DraftInput, userId?: string
         amountDue: totals.total,
         notes: input.notes ?? null,
         paymentTerms: input.paymentTerms ?? inv.paymentTerms,
+        billToOverride: input.billToOverride?.trim() || null,
         items: {
           create: input.items.map((it, i) => ({
             description: it.description,

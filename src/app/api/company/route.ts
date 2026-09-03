@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, canManageInvoices } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { updateCompanyProfile } from "@/lib/invoice/service";
+import { getCompanyProfile, updateCompanyProfile } from "@/lib/invoice/service";
 
 const FIELDS = [
   "legalName", "displayName", "logoUrl", "address", "city", "state", "country", "postalCode",
   "email", "phone", "taxId", "registrationNumber", "bankName", "bankAccountName", "accountNumber",
-  "iban", "swift", "defaultCurrency", "defaultPaymentTerms", "invoicePrefix", "invoiceFooter",
+  "routingNumber", "iban", "swift", "defaultCurrency", "defaultPaymentTerms", "invoicePrefix", "invoiceFooter",
 ] as const;
 
 export async function POST(req: NextRequest) {
@@ -18,14 +18,18 @@ export async function POST(req: NextRequest) {
   const data: Record<string, unknown> = {};
   for (const f of FIELDS) if (f in body) data[f] = body[f] === "" ? null : body[f];
 
-  // invoiceNextNumber can only be set forward, and only while no invoice has
-  // been issued at or above the requested number (never reuse issued numbers).
+  // invoiceNextNumber may only be changed while no invoice has been issued, so
+  // issued numbers are never reused. Only reject an *actual* change: the client
+  // always re-sends the current value, so an unchanged value must save fine.
   if (body.invoiceNextNumber != null && body.invoiceNextNumber !== "") {
     const n = parseInt(String(body.invoiceNextNumber), 10);
     if (Number.isFinite(n) && n > 0) {
-      const issuedCount = await prisma.invoice.count({ where: { invoiceNumber: { not: null } } });
-      if (issuedCount === 0) data.invoiceNextNumber = n;
-      else return NextResponse.json({ error: "Cannot change the starting number after invoices have been issued" }, { status: 400 });
+      const current = await getCompanyProfile();
+      if (n !== current.invoiceNextNumber) {
+        const issuedCount = await prisma.invoice.count({ where: { invoiceNumber: { not: null } } });
+        if (issuedCount > 0) return NextResponse.json({ error: "Cannot change the starting number after invoices have been issued" }, { status: 400 });
+        data.invoiceNextNumber = n;
+      }
     }
   }
 

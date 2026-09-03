@@ -35,6 +35,7 @@ export async function buildInvoiceHtml(invoiceId: string, showBank: boolean): Pr
     notes: inv.notes,
     paymentTerms: inv.paymentTerms,
     project: inv.project,
+    billToOverride: inv.billToOverride,
     items: inv.items.map((it) => ({
       description: it.description,
       quantity: Number(it.quantity),
@@ -76,6 +77,7 @@ export async function buildInvoiceHtml(invoiceId: string, showBank: boolean): Pr
     bankName: company.bankName,
     bankAccountName: company.bankAccountName,
     accountNumber: company.accountNumber,
+    routingNumber: company.routingNumber,
     iban: company.iban,
     swift: company.swift,
     invoiceFooter: company.invoiceFooter,
