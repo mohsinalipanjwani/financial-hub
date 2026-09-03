@@ -1,0 +1,543 @@
+// Financial Hub — relational schema
+// Google Sheets is the operational source of truth; this database is the
+// normalized, queryable copy that the dashboard reads from. Every financial
+// record keeps a pointer back to its source row for auditability.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (mirror the controlled "Settings" tab in the master sheet)
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  FINANCE
+  MANAGEMENT
+  EMPLOYEE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+}
+
+enum RevenueStatus {
+  DRAFT
+  CONFIRMED
+  INVOICED
+  CANCELLED
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  CLEARED
+  FAILED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum DataQualitySeverity {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum DataQualityStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+// Invoice lifecycle. OVERDUE is derived at read time (due date passed + amount
+// still owed) rather than stored, so it can never go stale.
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  SENT
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+// ---------------------------------------------------------------------------
+// Auth / users
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(EMPLOYEE)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+  invoicesCreated Invoice[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Core financial entities
+// ---------------------------------------------------------------------------
+
+model Client {
+  id         String    @id @default(cuid())
+  // Stable business key from the sheet ("Client ID"), unique.
+  clientKey  String    @unique @map("client_key")
+  name       String
+  source     String?
+  lead       String?
+  accountManager String? @map("account_manager")
+  active     Boolean   @default(true)
+  startDate  DateTime? @map("start_date")
+  notes      String?
+
+  // --- Billing profile (entered once, reused on every invoice) ---
+  legalName       String? @map("legal_name")
+  companyName     String? @map("company_name")
+  billingEmail    String? @map("billing_email")
+  billingContact  String? @map("billing_contact")
+  billingAddress  String? @map("billing_address")
+  city            String?
+  state           String?
+  country         String?
+  postalCode      String? @map("postal_code")
+  taxId           String? @map("tax_id")
+  vatNumber       String? @map("vat_number")
+  defaultCurrency String? @map("default_currency")
+  paymentTerms    String? @map("payment_terms")
+  invoiceNotes    String? @map("invoice_notes")
+
+  // Auditability
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  revenue    Revenue[]
+  payments   Payment[]
+  invoices   Invoice[]
+
+  @@map("clients")
+}
+
+model Revenue {
+  id            String        @id @default(cuid())
+  // Stable business key from the sheet ("Revenue ID"), unique -> idempotent sync.
+  revenueKey    String        @unique @map("revenue_key")
+
+  date          DateTime
+  // First day of the reporting month this revenue belongs to.
+  month         DateTime
+  project       String?
+  phase         String?
+
+  // Original amount + currency are NEVER overwritten. Convert at read time.
+  amount        Decimal       @db.Decimal(14, 2)
+  currency      String        @default("USD")
+
+  status        RevenueStatus @default(CONFIRMED)
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+
+  receivedDate  DateTime?     @map("received_date")
+  expectedDate  DateTime?     @map("expected_date")
+  paymentMethod String?       @map("payment_method")
+  lead          String?
+  developer     String?
+  notes         String?
+
+  clientId      String        @map("client_id")
+  client        Client        @relation(fields: [clientId], references: [id])
+
+  payments      Payment[]
+  // A revenue record has 0 or 1 primary invoice (MVP).
+  invoice       Invoice?
+
+  // Auditability
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([month])
+  @@index([clientId])
+  @@map("revenue")
+}
+
+model Payment {
+  id           String              @id @default(cuid())
+  paymentKey   String              @unique @map("payment_key")
+  date         DateTime
+  amount       Decimal             @db.Decimal(14, 2)
+  currency     String              @default("USD")
+  method       String?
+  status       PaymentRecordStatus @default(CLEARED)
+  notes        String?
+
+  clientId     String              @map("client_id")
+  client       Client              @relation(fields: [clientId], references: [id])
+
+  // A payment optionally settles a specific revenue record.
+  revenueId    String?             @map("revenue_id")
+  revenue      Revenue?            @relation(fields: [revenueId], references: [id])
+
+  // A payment may also be applied directly to an invoice.
+  invoiceId    String?             @map("invoice_id")
+  invoice      Invoice?            @relation(fields: [invoiceId], references: [id])
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([date])
+  @@index([clientId])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  employeeKey String  @unique @map("employee_key")
+  name       String
+  active     Boolean  @default(true)
+  notes      String?
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  costs      TeamCost[]
+
+  @@map("team_members")
+}
+
+// One row per employee per month (avoids monthly tabs; keeps history).
+model TeamCost {
+  id           String   @id @default(cuid())
+  costKey      String   @unique @map("cost_key")
+  month        DateTime
+  salary       Decimal  @db.Decimal(14, 2)
+  overhead     Decimal  @db.Decimal(14, 2) @default(0)
+  currency     String   @default("USD")
+
+  teamMemberId String   @map("team_member_id")
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id])
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([month])
+  @@index([teamMemberId])
+  @@map("team_costs")
+}
+
+model Subscription {
+  id           String   @id @default(cuid())
+  subscriptionKey String @unique @map("subscription_key")
+  name         String
+  owner        String?
+  category     String?
+  monthlyCost  Decimal  @db.Decimal(14, 2) @map("monthly_cost")
+  currency     String   @default("USD")
+  startDate    DateTime? @map("start_date")
+  renewalDate  DateTime? @map("renewal_date")
+  active       Boolean  @default(true)
+  notes        String?
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  expenseKey  String   @unique @map("expense_key")
+  date        DateTime
+  month       DateTime
+  category    String?
+  description String?
+  amount      Decimal  @db.Decimal(14, 2)
+  currency    String   @default("USD")
+  paid        Boolean  @default(true)
+  notes       String?
+
+  source_system String   @default("seed") @map("source_system")
+  sourceSheet   String?  @map("source_sheet")
+  sourceRow     Int?     @map("source_row")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  archived      Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([month])
+  @@map("expenses")
+}
+
+// Exchange rate to USD, effective from a given date (most recent <= date wins).
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  date      DateTime
+  currency  String
+  rateToUsd Decimal  @db.Decimal(18, 8) @map("rate_to_usd")
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([currency, date])
+  @@index([currency])
+  @@map("exchange_rates")
+}
+
+// ---------------------------------------------------------------------------
+// Sync + data quality + audit
+// ---------------------------------------------------------------------------
+
+model SyncRun {
+  id          String     @id @default(cuid())
+  startedAt   DateTime   @default(now()) @map("started_at")
+  finishedAt  DateTime?  @map("finished_at")
+  status      SyncStatus @default(RUNNING)
+  rowsRead    Int        @default(0) @map("rows_read")
+  rowsCreated Int        @default(0) @map("rows_created")
+  rowsUpdated Int        @default(0) @map("rows_updated")
+  rowsRejected Int       @default(0) @map("rows_rejected")
+  errorCount  Int        @default(0) @map("error_count")
+  message     String?
+
+  @@map("sync_runs")
+}
+
+model DataQualityIssue {
+  id         String              @id @default(cuid())
+  entityType String              @map("entity_type") // "revenue", "client", ...
+  entityKey  String?             @map("entity_key")  // business key if known
+  code       String              // e.g. "MISSING_AMOUNT"
+  severity   DataQualitySeverity @default(WARNING)
+  status     DataQualityStatus   @default(OPEN)
+  message    String
+  sourceSheet String?            @map("source_sheet")
+  sourceRow  Int?                @map("source_row")
+
+  detectedAt DateTime            @default(now()) @map("detected_at")
+  resolvedAt DateTime?           @map("resolved_at")
+
+  @@index([status])
+  @@index([entityType])
+  @@map("data_quality_issues")
+}
+
+// The Google account + spreadsheet used to sync the master sheet.
+// Stored as a single row (id = "primary"). Tokens are encrypted at rest.
+model GoogleConnection {
+  id                String    @id @default("primary")
+  email             String
+  accessToken       String    @map("access_token") // encrypted
+  refreshToken      String?   @map("refresh_token") // encrypted
+  expiresAt         DateTime? @map("expires_at")
+  scope             String?
+  spreadsheetId     String?   @map("spreadsheet_id")
+  connectedByUserId String?   @map("connected_by_user_id")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("google_connections")
+}
+
+// ---------------------------------------------------------------------------
+// Invoicing
+// ---------------------------------------------------------------------------
+
+// Single-row (id = "primary") company billing profile + invoice numbering.
+// Bank fields are only surfaced to authorized roles in the app layer.
+model CompanyProfile {
+  id                  String   @id @default("primary")
+  legalName           String?  @map("legal_name")
+  displayName         String?  @map("display_name")
+  logoUrl             String?  @map("logo_url") // data: URI or URL
+  address             String?
+  city                String?
+  state               String?
+  country             String?
+  postalCode          String?  @map("postal_code")
+  email               String?
+  phone               String?
+  taxId               String?  @map("tax_id")
+  registrationNumber  String?  @map("registration_number")
+  bankName            String?  @map("bank_name")
+  bankAccountName     String?  @map("bank_account_name")
+  accountNumber       String?  @map("account_number")
+  iban                String?
+  swift               String?
+  defaultCurrency     String   @default("USD") @map("default_currency")
+  defaultPaymentTerms String   @default("Net 30") @map("default_payment_terms")
+  invoicePrefix       String   @default("INV") @map("invoice_prefix")
+  invoiceNextNumber   Int      @default(1) @map("invoice_next_number")
+  invoiceFooter       String?  @map("invoice_footer")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("company_profile")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  // Assigned only when the invoice is ISSUED, so numbers are never wasted
+  // on discarded drafts. Unique once set.
+  invoiceNumber String?       @unique @map("invoice_number")
+
+  clientId      String        @map("client_id")
+  client        Client        @relation(fields: [clientId], references: [id])
+
+  // A revenue record has at most one primary invoice (MVP) — enforced unique.
+  revenueId     String?       @unique @map("revenue_id")
+  revenue       Revenue?      @relation(fields: [revenueId], references: [id])
+
+  project       String?
+
+  invoiceDate   DateTime      @map("invoice_date")
+  dueDate       DateTime      @map("due_date")
+  currency      String        @default("USD")
+
+  subtotal      Decimal       @db.Decimal(14, 2) @default(0)
+  discount      Decimal       @db.Decimal(14, 2) @default(0)
+  tax           Decimal       @db.Decimal(14, 2) @default(0)
+  total         Decimal       @db.Decimal(14, 2) @default(0)
+  amountPaid    Decimal       @db.Decimal(14, 2) @default(0) @map("amount_paid")
+  amountDue     Decimal       @db.Decimal(14, 2) @default(0) @map("amount_due")
+
+  status        InvoiceStatus @default(DRAFT)
+  notes         String?
+  paymentTerms  String?       @map("payment_terms")
+
+  issuedAt      DateTime?     @map("issued_at")
+  sentAt        DateTime?     @map("sent_at")
+  voidedAt      DateTime?     @map("voided_at")
+  voidReason    String?       @map("void_reason")
+
+  // Void/reissue linkage: this invoice replaces a voided original.
+  replacesInvoiceId String?   @map("replaces_invoice_id")
+  replaces          Invoice?  @relation("InvoiceReplacement", fields: [replacesInvoiceId], references: [id])
+  replacedBy        Invoice[] @relation("InvoiceReplacement")
+
+  createdById   String?       @map("created_by_id")
+  createdBy     User?         @relation(fields: [createdById], references: [id])
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  items    InvoiceItem[]
+  payments Payment[]
+  pdf      InvoicePdf?
+  emails   InvoiceEmail[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id           String  @id @default(cuid())
+  invoiceId    String  @map("invoice_id")
+  invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description  String
+  quantity     Decimal @db.Decimal(14, 2) @default(1)
+  unitPrice    Decimal @db.Decimal(14, 2) @map("unit_price")
+  amount       Decimal @db.Decimal(14, 2)
+  revenuePhase String? @map("revenue_phase")
+  sortOrder    Int     @default(0) @map("sort_order")
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+// The frozen PDF for an issued invoice, stored so a template change never
+// alters historical documents.
+model InvoicePdf {
+  id          String   @id @default(cuid())
+  invoiceId   String   @unique @map("invoice_id")
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  data        Bytes
+  contentType String   @default("application/pdf") @map("content_type")
+  byteSize    Int      @default(0) @map("byte_size")
+  createdAt   DateTime @default(now())
+
+  @@map("invoice_pdfs")
+}
+
+// Email history scaffold — no provider wired in for the MVP.
+model InvoiceEmail {
+  id        String    @id @default(cuid())
+  invoiceId String    @map("invoice_id")
+  invoice   Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  toEmail   String    @map("to_email")
+  subject   String?
+  status    String    @default("PENDING") // PENDING / SENT / FAILED
+  sentAt    DateTime? @map("sent_at")
+  error     String?
+  createdAt DateTime  @default(now())
+
+  @@index([invoiceId])
+  @@map("invoice_emails")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
