@@ -23,7 +23,7 @@ export function Filters({
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const type = params.get("type") || "month";
+  const type = params.get("type") || "quarter";
   const now = new Date();
   const year = params.get("year") || String(now.getUTCFullYear());
   const month = params.get("month") ?? String(now.getUTCMonth());

@@ -34,7 +34,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   let salaryTotal = 0;
   let overheadTotal = 0;
   const byEmployee = new Map<string, number>();
-  const byMonth = new Map<string, number>();
+  // Keyed by the month's UTC timestamp so the series can be sorted
+  // chronologically — the query returns rows in no guaranteed order.
+  const byMonth = new Map<number, number>();
   const employees = new Set<string>();
 
   for (const c of costs) {
@@ -44,7 +46,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     overheadTotal += overhead;
     employees.add(c.teamMemberId);
     byEmployee.set(c.teamMember.name, (byEmployee.get(c.teamMember.name) ?? 0) + salary + overhead);
-    const mk = formatMonthLabel(c.month);
+    const mk = c.month.getTime();
     byMonth.set(mk, (byMonth.get(mk) ?? 0) + salary + overhead);
   }
 
@@ -54,7 +56,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const avgCost = employeeCount === 0 ? 0 : Math.round((totalCost / employeeCount / months) * 100) / 100;
 
   const costByEmployee = [...byEmployee.entries()].map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 })).sort((a, b) => b.value - a.value);
-  const monthlyCost = [...byMonth.entries()].map(([month, value]) => ({ month, value: Math.round(value * 100) / 100 }));
+  const monthlyCost = [...byMonth.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([ms, value]) => ({ month: formatMonthLabel(new Date(ms)), value: Math.round(value * 100) / 100 }));
   const salaryVsOverhead = [
     { name: "Salary", value: Math.round(salaryTotal * 100) / 100 },
     { name: "Overhead", value: Math.round(overheadTotal * 100) / 100 },

@@ -91,9 +91,9 @@ describe("formatMonthLabel", () => {
 
 describe("resolvePeriod", () => {
   const now = new Date("2026-09-15T00:00:00Z");
-  it("defaults to the current month", () => {
+  it("defaults to the current quarter", () => {
     const p = resolvePeriod({}, now);
-    expect(p.label).toBe("Sep 2026");
+    expect(p.label).toBe("Q3 2026");
   });
   it("resolves a quarter", () => {
     const p = resolvePeriod({ type: "quarter", year: "2026", quarter: "2" }, now);

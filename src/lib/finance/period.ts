@@ -102,7 +102,7 @@ export function formatMonthLabel(d: Date): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-/** Resolve dashboard search params into a Period. Defaults to current month. */
+/** Resolve dashboard search params into a Period. Defaults to current quarter. */
 export function resolvePeriod(params: {
   type?: string;
   year?: string;
@@ -113,9 +113,9 @@ export function resolvePeriod(params: {
 }, now = new Date()): Period {
   const year = params.year ? parseInt(params.year, 10) : now.getUTCFullYear();
   switch (params.type) {
-    case "quarter": {
-      const q = params.quarter ? parseInt(params.quarter, 10) : Math.floor(now.getUTCMonth() / 3) + 1;
-      return quarterPeriod(year, q);
+    case "month": {
+      const m = params.month != null ? parseInt(params.month, 10) : now.getUTCMonth();
+      return monthPeriod(year, m);
     }
     case "year":
       return yearPeriod(year);
@@ -125,10 +125,10 @@ export function resolvePeriod(params: {
       }
       return monthPeriod(now.getUTCFullYear(), now.getUTCMonth());
     }
-    case "month":
+    case "quarter":
     default: {
-      const m = params.month != null ? parseInt(params.month, 10) : now.getUTCMonth();
-      return monthPeriod(year, m);
+      const q = params.quarter ? parseInt(params.quarter, 10) : Math.floor(now.getUTCMonth() / 3) + 1;
+      return quarterPeriod(year, q);
     }
   }
 }
