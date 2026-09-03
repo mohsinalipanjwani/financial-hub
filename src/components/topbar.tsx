@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { relativeTime } from "@/lib/format";
 import { LogoutButton } from "./logout-button";
-import type { SessionUser } from "@/lib/auth";
+import { SyncButton } from "./sync-button";
+import { canManageConfig, type SessionUser } from "@/lib/auth";
 
 export function Topbar({
   user,
@@ -19,6 +20,8 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-4">
+        {canManageConfig(user.role) && <SyncButton />}
+
         {issueCount > 0 && (
           <Link
             href="/data-quality"
